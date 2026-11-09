@@ -1479,14 +1479,15 @@ const enable = () => {
 function initCalculators() {
   const CONFIG = {
     fees: {
-      processing: 0.005, // of the total bill, added to payment 1
+      processing: 0.005, // default, of the total bill, added to payment 1 (a bill's own `processing` overrides it)
       split: 0.03,       // of payment 2's bill share (not always 50%), added to payment 2
       membership: 5.99,  // flat, rent only, added to payment 1
     },
     // amount = default when the bill is selected; min/max/step drive the slider.
-    // Up to 2 × fixedSecond the bill splits 50/50; above it payment 2 is fixedSecond and payment 1 takes the rest
+    // Up to 2 × fixedSecond the bill splits 50/50; above it payment 2 is fixedSecond and payment 1 takes the rest.
+    // processing (optional) overrides fees.processing for that bill.
     bills: {
-      rent:      { label: "Rent",        amount: 1400, min: 600, max: 5000, step: 10, fixedSecond: 2000, membership: true },
+      rent:      { label: "Rent",        amount: 1400, min: 600, max: 5000, step: 10, fixedSecond: 2000, membership: true, processing: 0.006 },
       mortgage:  { label: "Mortgage",    amount: 2400, min: 10,  max: 5000, step: 10, fixedSecond: 1500 },
       car:       { label: "Car payment", amount: 480,  min: 10,  max: 5000, step: 10, fixedSecond: 600 },
       utilities: { label: "Utilities",   amount: 300,  min: 10,  max: 5000, step: 10, fixedSecond: 800 },
@@ -1515,6 +1516,9 @@ function initCalculators() {
   const usd0 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const usd2 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
   const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+  const processingRate = (bill) => bill.processing ?? CONFIG.fees.processing;
+  // 0.006 → "0.6"; toFixed trims float noise (0.6000000000000001)
+  const formatRate = (rate) => String(Number((rate * 100).toFixed(4)));
 
   // Writes "$712" + <span class="calculator_cents">.99</span> so the cents can be styled smaller
   function setMoney(el, value) {
@@ -1533,7 +1537,7 @@ function initCalculators() {
     const fixedC = bill.fixedSecond * 100;
     const secondHalf = totalC > fixedC * 2 ? fixedC : totalC - Math.round(totalC / 2);
     const firstHalf = totalC - secondHalf;
-    const processing = Math.round(totalC * CONFIG.fees.processing);
+    const processing = Math.round(totalC * processingRate(bill));
     const split = Math.round(secondHalf * CONFIG.fees.split);
     const membership = bill.membership ? Math.round(CONFIG.fees.membership * 100) : 0;
 
@@ -1563,6 +1567,7 @@ function initCalculators() {
       payment1: q("payment-1"),
       payment2: q("payment-2"),
       feeProcessing: q("fee-processing"),
+      processingLabel: q("processing-label"), // span holding the rate, e.g. "0.5" or "0.5%"
       feeSplit: q("fee-split"),
       feeMembership: q("fee-membership"),
       rowMembership: q("row-membership"),
@@ -1575,6 +1580,9 @@ function initCalculators() {
     const page = CONFIG.pages[root.dataset.calcPage] ? root.dataset.calcPage : CONFIG.defaultPage;
     const billKeys = CONFIG.pages[page].filter((key) => CONFIG.bills[key]);
     const startKey = billKeys.includes(root.dataset.calcDefault) ? root.dataset.calcDefault : billKeys[0];
+
+    // Keep a "%" only if the Webflow span was authored with one
+    const labelHasPercent = ui.processingLabel ? ui.processingLabel.textContent.includes("%") : false;
 
     const state = { key: startKey, value: CONFIG.bills[startKey].amount };
     const bill = () => CONFIG.bills[state.key];
@@ -1598,6 +1606,9 @@ function initCalculators() {
       setMoney(ui.payment1, result.payment1);
       setMoney(ui.payment2, result.payment2);
       if (ui.feeProcessing) ui.feeProcessing.textContent = usd2.format(result.fees.processing);
+      if (ui.processingLabel) {
+        ui.processingLabel.textContent = formatRate(processingRate(b)) + (labelHasPercent ? "%" : "");
+      }
       if (ui.feeSplit) ui.feeSplit.textContent = usd2.format(result.fees.split);
       if (ui.feeMembership) ui.feeMembership.textContent = usd2.format(CONFIG.fees.membership);
       // Inline display beats the Webflow class's display value; the hidden attribute wouldn't
@@ -2893,7 +2904,14 @@ function bootMarquee() {
    initTextSplit runs, since that's what dispatches the event.
    ========================================================================== */
 
-document.addEventListener('DOMContentLoaded', () => {
+// Runs on DOMContentLoaded, or straight away if the script arrives after it
+// (e.g. when the head loader injects it), so init never gets skipped.
+function onReady(fn) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+  else fn();
+}
+
+onReady(() => {
   initLenis();
   initGlobalParallax();
   initMegaNavDirectionalHover();
