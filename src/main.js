@@ -2898,6 +2898,120 @@ function bootMarquee() {
 }
 
 /* ==========================================================================
+   Credit gauge — the arc fills and the score counts up with it
+   --------------------------------------------------------------------------
+   Markup lives in credit-gauge-embed.html (a Webflow Embed). Hooks:
+     [data-credit-gauge]            root. Optional attributes:
+        data-gauge-value="650"        score; falls back to the number's own text
+        data-gauge-min / -max         scale the arc fills against (0 / 900)
+        data-gauge-duration="2"       seconds the fill + count take
+        data-gauge-delay="0.15"       seconds before it starts once triggered
+        data-gauge-trigger-start      ScrollTrigger start ("top 85%")
+     [data-gauge-arc]               the stroked fill path; the knob rides its end
+     [data-gauge-knob]              knob group, moved along the arc
+     [data-gauge-knob-ring]         inner group that pops when the fill lands
+     [data-gauge-number]            the score text
+     [data-gauge-badge]             optional, any number: rise in once the fill is most of the way round
+   Plays on enter, resets once the gauge is fully back below the viewport (same as the odometers).
+   ========================================================================== */
+function initCreditGauge() {
+  const CONFIG = {
+    duration: 2,
+    delay: 0.15,
+    ease: "power3.out",
+    triggerStart: "top 85%",
+    scale: { min: 0, max: 900 },
+    pop: { scale: 1.15, up: 0.15, settle: 0.7 },
+    badge: { at: 0.55, y: 20, duration: 0.6, ease: "back.out(1.6)", stagger: 0.1 }, // at: share of the fill
+  };
+
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  document.querySelectorAll("[data-credit-gauge]").forEach((root) => {
+    if (root.hasAttribute("data-gauge-initialized")) return;
+
+    const arc = root.querySelector("[data-gauge-arc]");
+    const knob = root.querySelector("[data-gauge-knob]");
+    const ring = root.querySelector("[data-gauge-knob-ring]");
+    const number = root.querySelector("[data-gauge-number]");
+    if (!arc || !number) return;
+
+    const read = (attr, fallback) => {
+      const n = parseFloat(root.getAttribute(attr));
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const value = read("data-gauge-value", parseFloat(number.textContent.replace(/[^\d.]/g, "")));
+    if (!Number.isFinite(value)) return;
+    root.setAttribute("data-gauge-initialized", "");
+
+    const min = read("data-gauge-min", CONFIG.scale.min);
+    const max = read("data-gauge-max", CONFIG.scale.max);
+    const fill = Math.min(1, Math.max(0, (value - min) / (max - min)));
+    const duration = read("data-gauge-duration", CONFIG.duration);
+    const delay = read("data-gauge-delay", CONFIG.delay);
+    const triggerStart = root.getAttribute("data-gauge-trigger-start") || CONFIG.triggerStart;
+    const badges = [...root.querySelectorAll("[data-gauge-badge]")];
+
+    // The arc is drawn by dash offset; the knob is placed at the same point along the path,
+    // so it stays on the arc whatever shape or size the embed's path has
+    const length = arc.getTotalLength();
+    gsap.set(arc, { strokeDasharray: length });
+
+    // t runs 0 → 1 and drives everything, so the arc, knob and number can never drift apart
+    const state = { t: 0 };
+    const render = () => {
+      const p = state.t * fill;
+      arc.style.strokeDashoffset = length * (1 - p);
+      if (knob) {
+        const pt = arc.getPointAtLength(length * p);
+        gsap.set(knob, { x: pt.x, y: pt.y });
+      }
+      number.textContent = Math.round(state.t * value).toLocaleString("en-US");
+    };
+
+    if (reduceMotion) {
+      state.t = 1;
+      render();
+      return;
+    }
+    render();
+
+    const tl = gsap.timeline({ paused: true });
+    tl.to(state, { t: 1, duration, ease: CONFIG.ease, onUpdate: render }, delay);
+
+    // The knob gives a small pop as the fill lands
+    if (ring) {
+      const { pop } = CONFIG;
+      tl.to(ring, { scale: pop.scale, transformOrigin: "50% 50%", duration: pop.up, ease: "power2.out" }, delay + duration - pop.up)
+        .to(ring, { scale: 1, duration: pop.settle, ease: "elastic.out(1, 0.4)" }, delay + duration);
+    }
+
+    if (badges.length) {
+      const { badge } = CONFIG;
+      tl.from(
+        badges,
+        { y: badge.y, scale: 0.9, autoAlpha: 0, duration: badge.duration, ease: badge.ease, stagger: badge.stagger },
+        delay + duration * badge.at
+      );
+    }
+
+    // Play on enter; reset only once the gauge is fully below the viewport again
+    ScrollTrigger.create({ trigger: root, start: triggerStart, onEnter: () => tl.play() });
+    // onEnter needs a scroll past start, so a gauge already on screen at load plays directly
+    if (ScrollTrigger.isInViewport(root)) tl.play();
+    ScrollTrigger.create({
+      trigger: root,
+      start: "top bottom",
+      onLeaveBack: () => {
+        tl.pause(0);
+        state.t = 0;
+        render();
+      },
+    });
+  });
+}
+
+/* ==========================================================================
    Init
    --------------------------------------------------------------------------
    Lenis and parallax start immediately; anything that measures text waits on
@@ -2926,6 +3040,7 @@ onReady(() => {
   initCardSplit();
   initCardFloat();
     initNumberOdometer();
+  initCreditGauge();
       initModalBasic();
   init404();
   bootMarquee();

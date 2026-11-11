@@ -1,0 +1,98 @@
+<!--
+  Credit gauge — paste into a Webflow Embed element (replaces the flat gauge image).
+  The animation lives in main.js (initCreditGauge); this is only markup + style.
+
+  Scales to whatever width its Webflow parent gives it: the SVG is a fixed viewBox and the
+  text uses container units. Put the three bureau tiles in a Webflow div under it and add
+  data-gauge-badge to each if you want them to rise in as the gauge finishes.
+
+  Change the score with data-gauge-value (and the number's text, which shows without JS).
+  The arc fills against 0–900 so 650 lands where the original artwork did; override with
+  data-gauge-min / data-gauge-max if the scale should be different.
+-->
+<style>
+  .credit-gauge {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1358 / 760;
+    container-type: inline-size; /* text below is sized in cqw, so it scales with the gauge */
+  }
+  .credit-gauge_svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible; /* the knob's shadow reaches past the viewBox */
+  }
+  .credit-gauge_readout {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 44%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    pointer-events: none;
+  }
+  .credit-gauge_number {
+    margin: 0;
+    font-family: inherit;
+    font-size: 20.3cqw;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: var(--credit-gauge-number, #111);
+    font-variant-numeric: tabular-nums; /* equal-width digits, so the count doesn't jitter */
+  }
+  .credit-gauge_label {
+    margin-top: 3.4cqw;
+    font-family: inherit;
+    font-size: 3.8cqw;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--credit-gauge-label, #343d1c);
+  }
+</style>
+
+<div class="credit-gauge" data-credit-gauge data-gauge-value="650">
+  <svg class="credit-gauge_svg" viewBox="0 0 1358 760" fill="none" aria-hidden="true" focusable="false">
+    <defs>
+      <!-- Fixed across the arc, so the colour at any point is the same however far it has filled -->
+      <linearGradient id="credit-gauge-grad" gradientUnits="userSpaceOnUse" x1="58" y1="0" x2="1130" y2="0">
+        <stop offset="0" stop-color="#c9a8ff" />
+        <stop offset="1" stop-color="#8b1cff" />
+      </linearGradient>
+      <filter id="credit-gauge-shadow" x="-60%" y="-60%" width="220%" height="220%">
+        <feDropShadow dx="10" dy="18" stdDeviation="14" flood-color="#000" flood-opacity="0.22" />
+      </filter>
+    </defs>
+
+    <!-- Track -->
+    <path d="M58 680 A621 621 0 0 1 1300 680" stroke="#ebebeb" stroke-width="116" stroke-linecap="round" />
+
+    <!-- Fill. The inline dash values are the 650/900 resting state for no-JS; the script takes over from them -->
+    <path
+      data-gauge-arc
+      d="M58 680 A621 621 0 0 1 1300 680"
+      stroke="url(#credit-gauge-grad)"
+      stroke-width="116"
+      stroke-linecap="round"
+      style="stroke-dasharray: 1951; stroke-dashoffset: 542"
+    />
+
+    <!-- Knob. The translate is the 650/900 resting position for no-JS -->
+    <g data-gauge-knob transform="translate(1075 200)">
+      <g data-gauge-knob-ring filter="url(#credit-gauge-shadow)">
+        <circle r="78" fill="#7448f6" />
+        <circle r="42" fill="#fff" />
+      </g>
+    </g>
+  </svg>
+
+  <div class="credit-gauge_readout">
+    <div class="credit-gauge_number" data-gauge-number>650</div>
+    <div class="credit-gauge_label">Credit History</div>
+  </div>
+</div>
