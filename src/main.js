@@ -1799,7 +1799,9 @@ function initCalculators() {
    ========================================================================== */
 function initCardSplit() {
   const CONFIG = {
-    autoSplit: 2.5, // seconds after load before the card splits on its own; clicking [data-split-trigger] splits sooner
+    // Seconds after init before the card splits on its own; clicking [data-split-trigger] splits sooner.
+    // Init runs ~1.2s into a typical page load and the cut lands cutAt (0.14s) after this, so 1 keeps the split inside 3s
+    autoSplit: 1,
     color: "--_colors---base-new--active-green-500", // pressed button (the seam and glow colours are set in the embed CSS)
     intro: { delay: 0.375, duration: 1.2, ease: "expo.out", y: "3rem", scale: 0.96 },
     // Times below are seconds from the trigger. The card squeezes a touch with the button press
